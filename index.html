@@ -49,9 +49,9 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:5px;backgro
 .stf__outerShadow,.stf__innerShadow,.stf__hardShadow,.stf__hardInnerShadow{position:absolute;left:0;top:0}
 /* وضع احتياطي إن تعذّر تحميل المكتبة */
 .fb{position:relative}
-.fb .page{position:absolute;inset:0;margin:auto;height:100%;aspect-ratio:607/854;max-width:100%;opacity:0;transform:translateX(7%) scale(.96);transition:opacity .45s cubic-bezier(.2,.7,.2,1),transform .55s cubic-bezier(.2,.7,.2,1);box-shadow:0 30px 60px -20px rgba(0,0,0,.5);pointer-events:none}
+.fb .page{position:absolute;inset:0;margin:auto;height:100%;aspect-ratio:607/854;max-width:100%;opacity:0;transform:translateX(-7%) scale(.96);transition:opacity .45s cubic-bezier(.2,.7,.2,1),transform .55s cubic-bezier(.2,.7,.2,1);box-shadow:0 30px 60px -20px rgba(0,0,0,.5);pointer-events:none}
 .fb .page.on{opacity:1;transform:none}
-.fb .page.past{transform:translateX(-7%) scale(.96)}
+.fb .page.past{transform:translateX(7%) scale(.96)}
 .bar{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 12px 14px;direction:ltr}
 .pill{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 10px 30px -12px rgba(0,0,0,.35)}
 button{all:unset;box-sizing:border-box;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:var(--fg);transition:background .2s,transform .15s}
@@ -66,6 +66,9 @@ button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;s
 #snd[aria-pressed="false"] .on{display:none}
 #snd[aria-pressed="true"] .off{display:none}
 .prog{height:3px;background:var(--line);margin:0 auto;width:min(420px,70%);border-radius:3px;overflow:hidden}
+.prog{direction:rtl}
+.pill{direction:rtl}
+#cnt{direction:ltr;unicode-bidi:isolate}
 .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .5s cubic-bezier(.2,.7,.2,1)}
 </style>
 </head>
@@ -91,9 +94,9 @@ button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;s
 <div class="prog"><i id="pg"></i></div>
 <div class="bar">
   <div class="pill">
-    <button id="prev" aria-label="الصفحة السابقة"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <button id="prev" aria-label="الصفحة السابقة"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
     <div id="cnt" aria-live="polite"></div>
-    <button id="next" aria-label="الصفحة التالية"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    <button id="next" aria-label="الصفحة التالية"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
   </div>
   <div class="pill">
     <button id="snd" aria-pressed="true" aria-label="تشغيل أو إيقاف الصوت">
@@ -156,44 +159,56 @@ function flipSound(){
 }
 
 /* ---------- العدّاد ---------- */
+/* الكتاب من اليمين لليسار: المصفوفة معكوسة، فالفهرس i يمثّل الصفحة total-i */
 function update(idx){
-  let label = nf.format(idx+1);
-  const landscape = flip && flip.getOrientation && flip.getOrientation() === 'landscape';
-  if(landscape) label = nf.format(idx+1) + ' – ' + nf.format(Math.min(idx+2,total));
-  document.getElementById('cnt').textContent = label + ' / ' + nf.format(total);
-  document.getElementById('pg').style.width = (Math.min(idx+(landscape?2:1),total)/total*100) + '%';
-  document.getElementById('prev').disabled = idx <= 0;
-  document.getElementById('next').disabled = idx >= total-(landscape?2:1);
+  const land = flip.getOrientation && flip.getOrientation() === 'landscape';
+  if(land && idx % 2) idx -= 1;
+  const hi = total - idx, lo = land ? Math.max(hi-1,1) : hi;
+  document.getElementById('cnt').textContent = (land ? nf.format(lo)+' – '+nf.format(hi) : nf.format(hi)) + ' / ' + nf.format(total);
+  document.getElementById('pg').style.width = (hi/total*100) + '%';
+  document.getElementById('next').disabled = hi >= total;
+  document.getElementById('prev').disabled = lo <= 1;
+}
+function updateFb(n){
+  document.getElementById('cnt').textContent = nf.format(n+1) + ' / ' + nf.format(total);
+  document.getElementById('pg').style.width = ((n+1)/total*100) + '%';
+  document.getElementById('prev').disabled = n <= 0;
+  document.getElementById('next').disabled = n >= total-1;
 }
 
 /* ---------- التشغيل ---------- */
+let goNext, goPrev;
 if(window.St && St.PageFlip){
+  const rev = pages.slice().reverse(); // ترتيب معكوس ليصير التقليب من اليمين لليسار
   flip = new St.PageFlip(book, {
     width:607, height:854, size:'stretch',
-    minWidth:120, maxWidth:620, minHeight:170, maxHeight:870,
-    showCover:false, usePortrait:false, mobileScrollSupport:false,
+    minWidth:300, maxWidth:620, minHeight:170, maxHeight:870,
+    showCover:false, usePortrait:true, mobileScrollSupport:false, startPage:total-2,
     drawShadow:true, maxShadowOpacity:0.6, flippingTime:1150, swipeDistance:25, startZIndex:0
   });
-  flip.loadFromHTML(pages);
+  flip.loadFromHTML(rev);
+  if(flip.getOrientation() === 'portrait') flip.turnToPage(total-1);
   flip.on('changeState', e => { if(e.data === 'flipping') flipSound(); });
   flip.on('flip', e => update(e.data));
-  update(0);
+  flip.on('changeOrientation', () => setTimeout(() => update(flip.getCurrentPageIndex()), 50));
+  update(flip.getCurrentPageIndex());
   window.addEventListener('resize', () => update(flip.getCurrentPageIndex()));
-  document.getElementById('next').onclick = () => flip.flipNext();
-  document.getElementById('prev').onclick = () => flip.flipPrev();
+  goNext = () => flip.flipPrev();
+  goPrev = () => flip.flipNext();
 }else{
   // وضع احتياطي: انتقال ناعم بين الصفحات
   book.classList.add('fb');
   const show = n => pages.forEach((p,k) => { p.classList.toggle('on', k===n); p.classList.toggle('past', k<n); });
-  const go = s => { const n = fbIndex + s; if(n<0 || n>=total) return; fbIndex = n; flipSound(); show(n); update(n); };
-  show(0); update(0);
-  document.getElementById('next').onclick = () => go(1);
-  document.getElementById('prev').onclick = () => go(-1);
-  window.fbGo = go;
+  const go = s => { const n = fbIndex + s; if(n<0 || n>=total) return; fbIndex = n; flipSound(); show(n); updateFb(n); };
+  show(0); updateFb(0);
+  goNext = () => go(1);
+  goPrev = () => go(-1);
 }
+document.getElementById('next').onclick = () => goNext();
+document.getElementById('prev').onclick = () => goPrev();
 addEventListener('keydown', e => {
-  if(e.key === 'ArrowRight' || e.key === 'ArrowDown'){ flip ? flip.flipNext() : window.fbGo(1); }
-  if(e.key === 'ArrowLeft'  || e.key === 'ArrowUp'){ flip ? flip.flipPrev() : window.fbGo(-1); }
+  if(e.key === 'ArrowLeft'  || e.key === 'ArrowDown') goNext();
+  if(e.key === 'ArrowRight' || e.key === 'ArrowUp')   goPrev();
 });
 const sndB = document.getElementById('snd');
 sndB.onclick = () => { soundOn = !soundOn; sndB.setAttribute('aria-pressed', soundOn); unlock(); };
